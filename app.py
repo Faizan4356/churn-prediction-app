@@ -148,6 +148,22 @@ st.markdown(
         border-radius: 10px;
         padding: 0.75rem 1rem;
     }}
+    /* Soft colorful page background - a light blue-to-lavender wash
+       behind everything, with white "cards" for the form and the
+       main block so text stays readable on top of it. */
+    [data-testid="stAppViewContainer"] > .main {{
+        background: linear-gradient(180deg, #eaf1fc 0%, #f3eefc 45%, #fdf6f0 100%);
+    }}
+    div[data-testid="stForm"] {{
+        background: rgba(255,255,255,0.75);
+        border-radius: 14px;
+        padding: 1.25rem 1.5rem 0.5rem 1.5rem;
+        border: 1px solid rgba(0,0,0,0.06);
+    }}
+    div.block-container div[data-testid="stVerticalBlockBorderWrapper"] {{
+        background: rgba(255,255,255,0.6);
+        border-radius: 12px;
+    }}
     </style>
     <div class="hero-banner">
         <h1>📉 Customer Churn Predictor</h1>
@@ -161,22 +177,34 @@ st.markdown(
 with st.expander("❓ New here? Read this first (30 seconds)", expanded=False):
     st.markdown(
         """
-        **What this app does:** it looks at one customer's details (how long
-        they've been a customer, what plan they're on, how much they pay,
-        etc.) and predicts how likely they are to **cancel their service**
-        ("churn").
+        **What this app does:** it looks at one customer's details — how long
+        they've been a customer, what contract they're on, how much they
+        pay, which add-on services they use — and predicts how likely they
+        are to **cancel their service** ("churn"). It's built on a machine
+        learning model (XGBoost) trained on 7,043 real telecom customers,
+        about a quarter of whom actually churned.
+
+        **Why this matters for a business:** it's far cheaper to keep an
+        existing customer than to win a new one. If a company can flag
+        "this customer is 90% likely to leave" *before* they leave, they
+        can step in with a discount, a phone call, or a better plan —
+        instead of finding out only after the customer has already
+        cancelled.
 
         **You don't need to know what to type.** Click one of the three
         example buttons below the form title — *Loyal customer*,
         *Average customer*, or *At-risk customer* — to instantly fill the
         form with a realistic example, then hit **Predict**. Once you see
-        how it works, feel free to change any field yourself and predict
-        again.
+        how it works, feel free to change any field yourself (like tenure
+        or contract type) and predict again to see how the result changes.
 
-        **What you'll get back:**
-        - A **risk score** (0-100%) — how likely this customer is to leave.
-        - The **top reasons** behind that score, in plain sentences.
-        - How this customer compares to a **typical customer** in the data.
+        **What you'll get back, in order:**
+        1. A **risk score** (0-100%) — how likely this customer is to leave,
+           shown as a plain sentence and a color-coded speedometer.
+        2. The **top reasons** behind that score, translated into plain
+           sentences (not technical jargon).
+        3. How this customer **compares to a typical customer** in the data.
+        4. A breakdown of which **services** this customer is subscribed to.
         """
     )
 
@@ -190,6 +218,78 @@ def load_model():
     return model, meta
 
 model, meta = load_model()
+
+# ---------------------------------------------------------------
+# 0a. Dataset-wide reference charts - these are NOT about any one
+# customer. They show patterns across all 7,043 customers the model
+# was trained on, so a reader has context for *why* the model cares
+# about contract type and tenure before they even predict anything.
+# ---------------------------------------------------------------
+st.subheader("📊 What drives churn in general?")
+st.markdown(
+    "These two charts summarize patterns found across **all 7,043 "
+    "customers** in the training data (not the one you'll enter below). "
+    "They explain *why* the model pays so much attention to contract type "
+    "and tenure."
+)
+
+ref_col1, ref_col2 = st.columns(2)
+
+with ref_col1:
+    contract_fig = go.Figure(go.Bar(
+        x=["Month-to-\nmonth", "One year", "Two year"],
+        y=[42.7, 11.3, 2.8],
+        marker_color=[COLOR_CRITICAL, COLOR_WARNING, COLOR_GOOD],
+        text=["42.7%", "11.3%", "2.8%"],
+        textposition="outside",
+    ))
+    contract_fig.update_layout(
+        title="Churn rate by contract type",
+        height=280,
+        margin=dict(l=10, r=10, t=40, b=10),
+        yaxis_title="% who cancelled",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        yaxis=dict(gridcolor=GRID_COLOR, range=[0, 50]),
+    )
+    st.plotly_chart(contract_fig, use_container_width=True)
+    st.caption(
+        "**How to read this:** each bar is a contract type, and its height "
+        "is the percentage of customers on that contract who cancelled. "
+        "Month-to-month customers cancel **15x more often** than two-year "
+        "customers — because they can leave anytime with no penalty, while "
+        "longer contracts lock them in. This is the single strongest "
+        "pattern in the whole dataset."
+    )
+
+with ref_col2:
+    tenure_fig = go.Figure(go.Bar(
+        x=["0-12\nmonths", "13-24\nmonths", "25-48\nmonths", "49+\nmonths"],
+        y=[47.4, 28.7, 20.4, 9.5],
+        marker_color=[COLOR_CRITICAL, COLOR_WARNING, COLOR_WARNING, COLOR_GOOD],
+        text=["47.4%", "28.7%", "20.4%", "9.5%"],
+        textposition="outside",
+    ))
+    tenure_fig.update_layout(
+        title="Churn rate by how long they've stayed",
+        height=280,
+        margin=dict(l=10, r=10, t=40, b=10),
+        yaxis_title="% who cancelled",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        yaxis=dict(gridcolor=GRID_COLOR, range=[0, 55]),
+    )
+    st.plotly_chart(tenure_fig, use_container_width=True)
+    st.caption(
+        "**How to read this:** each bar is a group of customers by how "
+        "many months they've stayed. Brand-new customers (under a year) "
+        "cancel nearly **5x more often** than long-time customers (past 4 "
+        "years). Over half of all cancellations happen in a customer's "
+        "first 12 months — so the first year is when a company should "
+        "work hardest to keep someone happy."
+    )
+
+st.divider()
 
 # ---------------------------------------------------------------
 # 0. Quick-fill example buttons (outside the form so a click can
@@ -520,3 +620,53 @@ if submitted:
             f"the average of **${avgs['MonthlyCharges']:,.2f}/month**. Newer, "
             f"higher-paying customers tend to be higher risk."
         )
+
+    # -----------------------------------------------------------
+    # 5. Which services this customer has - a donut chart. This is
+    # the most approachable chart in the app (just a subscribed vs.
+    # not-subscribed split), useful as a plain visual summary of the
+    # customer's plan before/after reading the risk analysis above.
+    # -----------------------------------------------------------
+    st.divider()
+    st.subheader("6. What is this customer subscribed to?")
+    st.caption(
+        "A quick visual summary of this customer's plan. More subscribed "
+        "services generally means more reasons to stay (harder to walk "
+        "away from an ecosystem of services), but very high total bills "
+        "from stacking many add-ons can also push price-sensitive "
+        "customers toward leaving - it cuts both ways, which is why this "
+        "chart is useful alongside the risk score above, not instead of it."
+    )
+
+    service_labels = [
+        "Phone Service", "Multiple Lines", "Online Security", "Online Backup",
+        "Device Protection", "Tech Support", "Streaming TV", "Streaming Movies",
+    ]
+    service_values = service_cols_yes  # already collected above, same order
+    n_subscribed = sum(1 for v in service_values if v == "Yes")
+    n_total = len(service_values)
+
+    donut_fig = go.Figure(go.Pie(
+        labels=["Subscribed", "Not subscribed"],
+        values=[n_subscribed, n_total - n_subscribed],
+        hole=0.6,
+        marker_colors=[COLOR_BLUE, "#dcdcdc"],
+        textinfo="label+percent",
+        sort=False,
+    ))
+    donut_fig.update_layout(
+        height=280,
+        margin=dict(l=10, r=10, t=10, b=10),
+        showlegend=False,
+        annotations=[dict(
+            text=f"{n_subscribed}/{n_total}<br>services", x=0.5, y=0.5,
+            font_size=16, showarrow=False,
+        )],
+    )
+    st.plotly_chart(donut_fig, use_container_width=True)
+
+    subscribed_list = [lab for lab, val in zip(service_labels, service_values) if val == "Yes"]
+    if subscribed_list:
+        st.markdown(f"**Services this customer has:** {', '.join(subscribed_list)}.")
+    else:
+        st.markdown("**Services this customer has:** none of the optional add-ons.")
