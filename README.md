@@ -4,7 +4,7 @@ An end-to-end machine learning project that predicts which telecom customers
 are likely to cancel their service, explains *why* using SHAP, and serves
 live predictions through an interactive Streamlit web app.
 
-**Live demo:** [add your Streamlit Community Cloud URL here]
+**Live demo:** [churn-prediction-app-8ioaenzecxexkcskdmzvxc.streamlit.app](https://churn-prediction-app-8ioaenzecxexkcskdmzvxc.streamlit.app/)
 
 ## Overview
 
