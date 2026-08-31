@@ -8,13 +8,65 @@ Requires churn_model.joblib and churn_model_meta.joblib to exist in the
 same directory (produced by train_and_save_model.py).
 """
 
-import numpy as np
 import pandas as pd
 import streamlit as st
 import joblib
 import shap
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Customer Churn Predictor", page_icon="📉", layout="centered")
+
+# ---------------------------------------------------------------
+# Color palette - status colors (good/warning/critical) for churn
+# risk, a fixed categorical pair for comparison charts. Kept as
+# constants so every chart and card uses the same meaning-to-color
+# mapping instead of picking colors ad hoc.
+# ---------------------------------------------------------------
+COLOR_GOOD = "#0ca30c"       # low risk / retained
+COLOR_WARNING = "#eda100"    # medium risk
+COLOR_CRITICAL = "#d03b3b"   # high risk / churned
+COLOR_BLUE = "#2a78d6"       # primary / neutral series
+COLOR_MUTED = "#898781"      # secondary / "average customer" comparisons
+GRID_COLOR = "#e1e0d9"
+
+# ---------------------------------------------------------------
+# Light styling for a more polished look - a colored gradient header
+# band and card-style containers. Kept minimal so it still respects
+# the viewer's light/dark theme rather than fighting it.
+# ---------------------------------------------------------------
+st.markdown(
+    f"""
+    <style>
+    .hero-banner {{
+        background: linear-gradient(135deg, {COLOR_BLUE} 0%, #4a3aa7 100%);
+        padding: 1.75rem 2rem;
+        border-radius: 12px;
+        color: white;
+        margin-bottom: 1.5rem;
+    }}
+    .hero-banner h1 {{
+        color: white;
+        margin: 0 0 0.4rem 0;
+        font-size: 1.8rem;
+    }}
+    .hero-banner p {{
+        color: rgba(255,255,255,0.9);
+        margin: 0;
+        font-size: 0.95rem;
+    }}
+    div[data-testid="stMetric"] {{
+        background: rgba(128,128,128,0.08);
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+    }}
+    </style>
+    <div class="hero-banner">
+        <h1>📉 Customer Churn Predictor</h1>
+        <p>Enter a customer's details to estimate churn risk and see what's driving it.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------------------
 # Load model (cached so it's loaded once per session, not per click)
@@ -26,12 +78,6 @@ def load_model():
     return model, meta
 
 model, meta = load_model()
-
-st.title("📉 Customer Churn Predictor")
-st.write(
-    "Enter a customer's details below to estimate their probability of "
-    "churning and see the top factors driving that prediction."
-)
 
 # ---------------------------------------------------------------
 # 1. Input form
@@ -65,7 +111,7 @@ with st.form("customer_form"):
         streaming_tv = st.selectbox("Streaming TV", ["No", "Yes"])
         streaming_movies = st.selectbox("Streaming Movies", ["No", "Yes"])
 
-    submitted = st.form_submit_button("Predict")
+    submitted = st.form_submit_button("Predict", use_container_width=True)
 
 # ---------------------------------------------------------------
 # 2. Build feature row + predict
@@ -119,16 +165,51 @@ if submitted:
 
     proba = float(model.predict_proba(input_df)[0, 1])
 
+    if proba >= 0.66:
+        risk_label, risk_color = "High risk of churn", COLOR_CRITICAL
+    elif proba >= 0.33:
+        risk_label, risk_color = "Moderate risk", COLOR_WARNING
+    else:
+        risk_label, risk_color = "Likely to stay", COLOR_GOOD
+
+    st.divider()
     st.subheader("Prediction")
-    risk_label = "High risk of churn" if proba >= 0.5 else "Likely to stay"
-    color = "red" if proba >= 0.5 else "green"
-    st.markdown(f"### :{color}[{risk_label}]")
-    st.metric("Predicted churn probability", f"{proba:.1%}")
-    st.progress(min(max(proba, 0.0), 1.0))
+
+    left, right = st.columns([1, 1])
+
+    with left:
+        # Gauge chart with three color zones (good/warning/critical) so
+        # the risk level reads instantly, not just from the number.
+        gauge_fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=proba * 100,
+            number={"suffix": "%", "font": {"size": 40, "color": risk_color}},
+            gauge={
+                "axis": {"range": [0, 100], "tickcolor": GRID_COLOR},
+                "bar": {"color": risk_color, "thickness": 0.3},
+                "bgcolor": "rgba(0,0,0,0)",
+                "borderwidth": 0,
+                "steps": [
+                    {"range": [0, 33], "color": "rgba(12,163,12,0.15)"},
+                    {"range": [33, 66], "color": "rgba(237,161,0,0.15)"},
+                    {"range": [66, 100], "color": "rgba(208,59,59,0.15)"},
+                ],
+            },
+            title={"text": "Churn Probability", "font": {"size": 14}},
+        ))
+        gauge_fig.update_layout(height=260, margin=dict(l=20, r=20, t=50, b=10))
+        st.plotly_chart(gauge_fig, use_container_width=True)
+
+    with right:
+        st.markdown(f"### :{'red' if risk_color == COLOR_CRITICAL else 'orange' if risk_color == COLOR_WARNING else 'green'}[{risk_label}]")
+        st.metric("Predicted churn probability", f"{proba:.1%}")
+        st.metric("Customer tenure", f"{tenure} months")
+        st.metric("Monthly charges", f"${monthly_charges:,.2f}")
 
     # -----------------------------------------------------------
-    # 3. Explain the prediction with SHAP - top 3 factors
+    # 3. Explain the prediction with SHAP - top factors, as a chart
     # -----------------------------------------------------------
+    st.divider()
     st.subheader("Why this prediction?")
 
     transformed = model.named_steps["prep"].transform(input_df)
@@ -140,15 +221,64 @@ if submitted:
     shap_row = explainer(transformed)
 
     contrib = pd.Series(shap_row.values[0], index=feature_names)
-    top3 = contrib.reindex(contrib.abs().sort_values(ascending=False).index[:3])
+    top = contrib.reindex(contrib.abs().sort_values(ascending=False).index[:5])
+    # Reverse so the largest contributor plots at the top of the bar chart
+    top = top.iloc[::-1]
 
-    for feature, value in top3.items():
-        # Clean up encoded names like "cat__Contract_Month-to-month" -> "Contract: Month-to-month"
-        clean_name = feature.split("__", 1)[-1].replace("_", " ", 1)
-        direction = "increased" if value > 0 else "decreased"
-        st.write(f"- **{clean_name}** {direction} churn risk (impact: {value:+.3f})")
+    clean_names = [f.split("__", 1)[-1].replace("_", " ", 1) for f in top.index]
+    bar_colors = [COLOR_CRITICAL if v > 0 else COLOR_GOOD for v in top.values]
+
+    shap_fig = go.Figure(go.Bar(
+        x=top.values,
+        y=clean_names,
+        orientation="h",
+        marker_color=bar_colors,
+        text=[f"{v:+.3f}" for v in top.values],
+        textposition="outside",
+    ))
+    shap_fig.update_layout(
+        height=280,
+        margin=dict(l=10, r=40, t=10, b=10),
+        xaxis_title="Impact on churn probability",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(gridcolor=GRID_COLOR, zeroline=True, zerolinecolor=GRID_COLOR),
+    )
+    st.plotly_chart(shap_fig, use_container_width=True)
 
     st.caption(
-        "Positive impact pushes the prediction toward 'will churn'; "
-        "negative impact pushes it toward 'will stay'."
+        f"🔴 Red bars increase churn risk · 🟢 Green bars decrease it. "
+        "Bar length shows how much that feature moved this prediction."
     )
+
+    # -----------------------------------------------------------
+    # 4. Customer vs. typical customer - quick visual context
+    # -----------------------------------------------------------
+    if "feature_averages" in meta:
+        st.divider()
+        st.subheader("This customer vs. a typical customer")
+
+        avgs = meta["feature_averages"]
+        compare_fig = go.Figure()
+        compare_fig.add_trace(go.Bar(
+            name="This customer",
+            x=["Tenure (months)", "Monthly Charges ($)"],
+            y=[tenure, monthly_charges],
+            marker_color=COLOR_BLUE,
+        ))
+        compare_fig.add_trace(go.Bar(
+            name="Average customer",
+            x=["Tenure (months)", "Monthly Charges ($)"],
+            y=[avgs["tenure"], avgs["MonthlyCharges"]],
+            marker_color=COLOR_MUTED,
+        ))
+        compare_fig.update_layout(
+            barmode="group",
+            height=300,
+            margin=dict(l=10, r=10, t=10, b=10),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            yaxis=dict(gridcolor=GRID_COLOR),
+        )
+        st.plotly_chart(compare_fig, use_container_width=True)

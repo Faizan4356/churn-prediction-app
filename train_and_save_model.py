@@ -46,7 +46,10 @@ model.fit(X_train, y_train)
 # Save the fitted pipeline (preprocessing + model together) and the
 # raw column lists the app's form needs to know about.
 joblib.dump(model, "churn_model.joblib")
+feature_averages = {"tenure": X["tenure"].mean(), "MonthlyCharges": X["MonthlyCharges"].mean()}
+
 joblib.dump({"categorical_cols": categorical_cols, "numeric_cols": numeric_cols,
-             "X_columns": X.columns.tolist()}, "churn_model_meta.joblib")
+             "X_columns": X.columns.tolist(),
+             "feature_averages": feature_averages}, "churn_model_meta.joblib")
 
 print("Saved churn_model.joblib and churn_model_meta.joblib")
