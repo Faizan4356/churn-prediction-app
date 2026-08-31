@@ -117,7 +117,7 @@ if submitted:
 
     input_df = pd.DataFrame([raw])[meta["X_columns"]]
 
-    proba = model.predict_proba(input_df)[0, 1]
+    proba = float(model.predict_proba(input_df)[0, 1])
 
     st.subheader("Prediction")
     risk_label = "High risk of churn" if proba >= 0.5 else "Likely to stay"
