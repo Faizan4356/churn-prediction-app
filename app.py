@@ -256,6 +256,16 @@ st.markdown(
         border-radius: 10px;
         padding: 0.75rem 1rem;
     }}
+    /* st.metric clips its value with an ellipsis by default when the
+       column is narrow (e.g. 3 metrics side by side on a small
+       screen) - allow it to wrap onto a second line instead of
+       truncating short words like "Neutral" into "Neut...". */
+    div[data-testid="stMetricValue"] {{
+        white-space: normal;
+        overflow: visible;
+        word-break: break-word;
+        line-height: 1.2;
+    }}
     [data-testid="stAppViewContainer"] > .main {{
         background: linear-gradient(180deg, #eaf1fc 0%, #f3eefc 45%, #fdf6f0 100%);
     }}
