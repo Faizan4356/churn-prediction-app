@@ -167,7 +167,14 @@ def predict_sentiment(texts, sentiment_tools):
     of short texts, while direct tokenize -> forward -> softmax calls
     are fast and reliable (see train_sentiment_model.py for the same
     fix and a fuller explanation).
+
+    If the sentiment model failed to load (sentiment_tools is None -
+    e.g. this deployment's sandbox blocks the model download and has
+    no local cache), returns neutral (0.0) for every text instead of
+    crashing, so the rest of the app keeps working.
     """
+    if sentiment_tools is None:
+        return [0.0] * len(texts)
     tokenizer, sentiment_model = sentiment_tools
     scores = []
     with torch.no_grad():
@@ -343,17 +350,23 @@ def load_sentiment_pipeline():
 
     Tries the local cache first (fast, and avoids a slow DNS-retry
     storm some networks hit on the Hub's "is there a newer version"
-    check) and falls back to a normal online download if nothing is
-    cached yet - e.g. a fresh cloud deployment with no prior cache,
-    where forcing offline mode would fail outright with no model."""
+    check), falls back to a normal online download if nothing is
+    cached yet, and returns None if BOTH fail for any reason (blocked
+    outbound network, disk/permission limits, out of memory, etc. -
+    whatever the specific cause, this deployment's sandbox won't allow
+    it) so the caller can degrade gracefully instead of crashing the
+    whole app."""
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
     model_name = "distilbert-base-uncased-finetuned-sst-2-english"
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
         sentiment_model = AutoModelForSequenceClassification.from_pretrained(model_name, local_files_only=True)
-    except OSError:
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        sentiment_model = AutoModelForSequenceClassification.from_pretrained(model_name)
+    except Exception:
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            sentiment_model = AutoModelForSequenceClassification.from_pretrained(model_name)
+        except Exception:
+            return None
     sentiment_model.eval()
     return tokenizer, sentiment_model
 
@@ -874,6 +887,12 @@ with tab_whatif:
 
             with st.spinner("Loading sentiment model (first run only takes longer)..."):
                 sentiment_pipe = load_sentiment_pipeline()
+            if sentiment_pipe is None:
+                st.info(
+                    "ℹ️ The sentiment model couldn't load in this environment, so the "
+                    "support message below was scored as neutral instead. Churn risk "
+                    "and usage trend are unaffected."
+                )
             sentiment_score = predict_sentiment([wi_message], sentiment_pipe)[0]
 
             health_score = combine_scores(churn_risk, usage_trend, sentiment_score)
@@ -972,6 +991,8 @@ with tab_batch:
                     st.caption("ℹ️ No usage history columns found - usage trend defaulted to 'Stable' for all rows.")
                 if not has_messages:
                     st.caption("ℹ️ No `support_message` column found - sentiment defaulted to neutral for all rows.")
+                elif sentiment_pipe is None:
+                    st.caption("ℹ️ The sentiment model couldn't load in this environment - sentiment defaulted to neutral for all rows.")
 
                 tier_filter = st.selectbox("Filter by risk tier", ["All", "Critical", "At-Risk", "Healthy"])
                 display_df = results if tier_filter == "All" else results[results["risk_tier"] == tier_filter]
