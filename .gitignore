@@ -2,3 +2,16 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Raw/intermediate data - regenerate locally via the pipeline scripts
+# rather than committing (see README "Running Locally"). Trained model
+# artifacts (churn_model.joblib, usage_trend_model.pt, etc.) and the
+# final customer_health_scores.csv ARE committed so the app works
+# out of the box without retraining.
+WA_Fn-UseC_-Telco-Customer-Churn.csv
+telco_churn_cleaned.csv
+telco_churn_features.csv
+usage_history.csv
+support_tickets.csv
+customer_sentiment_scores.csv
+plot*.png

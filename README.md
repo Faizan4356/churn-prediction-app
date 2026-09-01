@@ -1,8 +1,10 @@
-# Customer Churn Prediction
+# Customer Intelligence Platform
 
-An end-to-end machine learning project that predicts which telecom customers
-are likely to cancel their service, explains *why* using SHAP, and serves
-live predictions through an interactive Streamlit web app.
+An end-to-end machine learning project that started as a churn prediction
+model and grew into a full **Customer Intelligence Platform** — combining a
+production-grade churn classifier, a deep learning usage-trend model, and an
+NLP sentiment layer into one Health Score, served through an interactive
+Streamlit app with three ways to use it.
 
 **Live demo:** [churn-prediction-app-8ioaenzecxexkcskdmzvxc.streamlit.app](https://churn-prediction-app-8ioaenzecxexkcskdmzvxc.streamlit.app/)
 
@@ -29,6 +31,49 @@ alarm (an unnecessary retention offer), the project explicitly optimizes for
 **recall** on the churn class rather than raw accuracy — see
 [Model Performance](#model-performance) below.
 
+## Architecture: from churn model to Customer Intelligence Platform
+
+The original project (Phases 1-7 below) is a complete, standalone churn
+prediction pipeline trained entirely on **real data** — nothing about it
+changed. On top of that, four more layers were added to combine churn risk
+with two additional signals into one number a retention team can act on:
+
+```
+Data Science (cleaning, EDA)
+        ↓
+Machine Learning  →  churn risk score (XGBoost, real data, AUC 0.839)
+        ↓
+Deep Learning     →  usage-trend classifier (LSTM, synthetic usage data)
+        ↓
+NLP               →  sentiment analysis (pretrained DistilBERT, synthetic tickets)
+        ↓
+Combined Health Score (0-100) + risk tier (Critical / At-Risk / Healthy)
+```
+
+> ⚠️ **Honesty note on data:** the real Telco dataset only contains
+> account-level snapshot data (contract, charges, services) — it has **no**
+> month-by-month usage history and **no** customer support tickets. To build
+> and demo the deep learning and NLP layers, `generate_synthetic_data.py`
+> fabricates both, correlated with each customer's *real* churn status so
+> the synthetic signals behave the way real ones plausibly would (declining
+> usage and angrier tickets for customers who actually churned) rather than
+> being random noise. **The churn model itself (the ML layer) is trained on
+> 100% real data** - only the DL and NLP layers use synthetic input.
+
+**Framework note:** the usage-trend model is an LSTM built in **PyTorch**,
+not TensorFlow/Keras as originally planned — TensorFlow has no published
+build for Python 3.14 (this project's interpreter) at the time of writing.
+Same architecture and task, different framework. See
+`train_usage_trend_model.py` for details.
+
+**Combined Health Score:** `combine_health_score.py` weights churn risk
+highest (it's the single most predictive signal, backed by a model trained
+specifically for this task) and treats usage trend and sentiment as
+modifiers that can shift the score by up to 15 points each — enough to
+matter, not enough to override a strong churn signal in most cases (in
+testing, only ~3% of customers with >70% churn risk got pulled all the way
+into the "Healthy" tier by strongly positive secondary signals).
+
 ## Dataset
 
 [IBM Telco Customer Churn dataset](https://www.kaggle.com/datasets/blastchar/telco-customer-churn)
@@ -41,13 +86,17 @@ services (phone, internet, streaming, security add-ons).
 | Category | Tools |
 |---|---|
 | Data manipulation | pandas, numpy |
-| Modeling | scikit-learn (Logistic Regression, Random Forest), XGBoost |
+| Machine learning | scikit-learn (Logistic Regression, Random Forest), XGBoost |
+| Deep learning | PyTorch (LSTM usage-trend classifier) |
+| NLP | Hugging Face Transformers (pretrained DistilBERT sentiment model) |
 | Visualization | matplotlib, seaborn, Plotly (interactive charts in-app) |
 | Model interpretation | SHAP |
 | App / deployment | Streamlit, Streamlit Community Cloud |
 | Persistence | joblib |
 
 ## Pipeline
+
+**Original churn pipeline (real data):**
 
 | Phase | Script | What it does |
 |---|---|---|
@@ -57,7 +106,17 @@ services (phone, internet, streaming, security add-ons).
 | 4 | `churn_phase4_features.py` | Feature engineering (tenure bins, service count, spend ratio, contract-term flag) |
 | 5 | `churn_phase5_models.py` | Trains & compares Logistic Regression, Random Forest, XGBoost |
 | 6 | `churn_phase6_evaluation.py` | ROC/AUC, feature importance, SHAP explanations |
-| 7 | `app.py` | Streamlit app serving live predictions with charts |
+| 7 | `train_and_save_model.py` | Trains & serializes the final XGBoost pipeline used everywhere else |
+
+**Customer Intelligence Platform extension (synthetic DL/NLP inputs, real churn model):**
+
+| Script | What it does |
+|---|---|
+| `generate_synthetic_data.py` | Fabricates 5-month usage history + support tickets, correlated with real churn status |
+| `train_usage_trend_model.py` | Trains a PyTorch LSTM to classify usage as Declining/Stable/Growing (92.1% accuracy vs. 69.8% naive baseline) |
+| `train_sentiment_model.py` | Scores support tickets with a pretrained DistilBERT sentiment model + keyword-based complaint categories |
+| `combine_health_score.py` | Weights churn risk, usage trend, and sentiment into one 0-100 Health Score + risk tier |
+| `app.py` | Streamlit app - 4 tabs: Single Prediction, Search Existing Customer, What-If Simulator, Batch Upload |
 
 ## Key Findings
 
@@ -102,18 +161,30 @@ are the highest-risk segment.
 
 ## The App
 
-The Streamlit app (`app.py`) lets you enter a customer's details and get:
-- A **gauge chart** showing churn probability, color-coded green/amber/red
-  by risk level.
-- A **SHAP bar chart** of the top 5 factors pushing that specific
-  prediction up (red) or down (green).
-- A **comparison chart** of the customer's tenure and monthly charges
-  against the dataset average.
+The Streamlit app (`app.py`) has four tabs:
+
+1. **🔮 Single Prediction** — the original churn-only predictor. Enter a
+   customer's details (or click a Loyal/Average/At-risk example button) and
+   get a churn probability gauge, a SHAP bar chart of the top 5 factors
+   driving that specific prediction (in plain English, not raw feature
+   names), a comparison to the average customer, and a breakdown of
+   subscribed services.
+2. **🔍 Search Existing Customer** — look up any of the 7,043 training
+   customers by ID and see their full Health Score: churn risk, usage
+   trend, sentiment, complaint category, and a plain-language explanation.
+3. **🧪 What-If Simulator** — type in a hypothetical customer's account
+   details, their last 5 months of usage, and a sample support message, and
+   get a live Health Score computed by running all three models in real
+   time.
+4. **📁 Batch Upload** — upload a CSV of many customers, score them all at
+   once (churn model + usage-trend model + sentiment model, run per row),
+   filter by risk tier, and download the results.
 
 ## Running Locally
 
-**Requirements:** Python 3.10+ and the packages in `requirements.txt`
-(Streamlit, pandas, numpy, scikit-learn, XGBoost, SHAP, Plotly, joblib).
+**Requirements:** Python 3.10+ (this project was built and tested on 3.14)
+and the packages in `requirements.txt` (Streamlit, pandas, numpy,
+scikit-learn, XGBoost, SHAP, Plotly, joblib, PyTorch, Transformers).
 
 ```bash
 git clone https://github.com/Faizan4356/churn-prediction-app.git
@@ -125,39 +196,66 @@ Download the [Telco Customer Churn CSV](https://www.kaggle.com/datasets/blastcha
 and place it in this folder as `WA_Fn-UseC_-Telco-Customer-Churn.csv`, then:
 
 ```bash
-# Run the pipeline, in order
+# 1. Original churn pipeline
 python churn_phase1_eda.py
 python churn_phase2_cleaning.py
 python churn_phase3_eda.py
 python churn_phase4_features.py
 python churn_phase5_models.py
 python churn_phase6_evaluation.py
-
-# Train and save the model the app uses
 python train_and_save_model.py
 
-# Launch the app
+# 2. Customer Intelligence Platform extension - run in this exact order,
+#    each step depends on the previous one's output
+python generate_synthetic_data.py       # -> usage_history.csv, support_tickets.csv
+python train_usage_trend_model.py       # -> usage_trend_model.pt, usage_trend_labels.joblib
+python train_sentiment_model.py         # -> customer_sentiment_scores.csv
+python combine_health_score.py          # -> customer_health_scores.csv
+
+# 3. Verify everything end-to-end (30 automated checks)
+python test_customer_intelligence_platform.py
+
+# 4. Launch the app
 streamlit run app.py
 ```
 
 The app will be available at `http://localhost:8501`.
 
 > The repo already ships with a trained `churn_model.joblib` /
-> `churn_model_meta.joblib`, so you can skip straight to `streamlit run app.py`
-> if you just want to try the app without re-running the pipeline.
+> `churn_model_meta.joblib`, so `streamlit run app.py` alone gets you the
+> **Single Prediction** tab immediately. The other three tabs need the
+> Customer Intelligence Platform files above generated first.
+
+**A performance note if you hit a hang:** on some environments,
+`transformers`' high-level `pipeline()` wrapper can hang indefinitely even
+on small text batches (observed on Python 3.14 + PyTorch 2.10 on Windows).
+Both `train_sentiment_model.py` and `app.py` work around this by calling
+the tokenizer and model directly instead of through `pipeline()` — if you
+fork this and add NLP code elsewhere, prefer that same direct pattern.
 
 ## Project Structure
 
 ```
-├── churn_phase1_eda.py          # Data loading & understanding
-├── churn_phase2_cleaning.py     # Data cleaning
-├── churn_phase3_eda.py          # Exploratory data analysis
-├── churn_phase4_features.py     # Feature engineering
-├── churn_phase5_models.py       # Model training & comparison
-├── churn_phase6_evaluation.py   # Evaluation & SHAP interpretation
-├── train_and_save_model.py      # Trains & serializes the final model
-├── app.py                       # Streamlit app
-├── churn_model.joblib           # Serialized trained pipeline
-├── churn_model_meta.joblib      # Column metadata + averages for the app
+├── churn_phase1_eda.py               # Data loading & understanding
+├── churn_phase2_cleaning.py          # Data cleaning
+├── churn_phase3_eda.py               # Exploratory data analysis
+├── churn_phase4_features.py          # Feature engineering
+├── churn_phase5_models.py            # Model training & comparison
+├── churn_phase6_evaluation.py        # Evaluation & SHAP interpretation
+├── train_and_save_model.py           # Trains & serializes the final churn model
+├── churn_model.joblib                # Serialized trained churn pipeline
+├── churn_model_meta.joblib           # Column metadata + averages for the app
+│
+├── generate_synthetic_data.py        # Synthetic usage history + support tickets
+├── usage_trend_model_def.py          # Shared PyTorch LSTM class definition
+├── train_usage_trend_model.py        # Trains the usage-trend LSTM
+├── usage_trend_model.pt              # Trained LSTM weights
+├── usage_trend_labels.joblib         # Trend label encoder
+├── train_sentiment_model.py          # NLP sentiment + complaint category scoring
+├── combine_health_score.py           # Combines all 3 signals into a Health Score
+├── test_customer_intelligence_platform.py  # End-to-end verification (30 checks)
+│
+├── app.py                            # Streamlit app (4 tabs)
+├── .streamlit/config.toml            # App color theme
 └── requirements.txt
 ```

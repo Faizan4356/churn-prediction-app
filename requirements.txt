@@ -6,3 +6,5 @@ xgboost
 shap
 joblib
 plotly
+torch
+transformers
