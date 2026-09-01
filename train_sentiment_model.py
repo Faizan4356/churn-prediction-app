@@ -8,14 +8,6 @@ keyword rules, then aggregates to one row per customer.
 """
 
 import os
-# Force fully offline/local loading - this environment intermittently
-# hits DNS failures on HuggingFace Hub's "is there a newer config"
-# connectivity check, which (without these flags) retries with a long
-# exponential backoff even though the model is already fully cached
-# locally. local_files_only=True below (belt-and-suspenders with these
-# env vars) skips that check entirely.
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 # Cap PyTorch's intra-op thread pool - on this environment (Python 3.14
 # + torch 2.10 on Windows) leaving it at the auto-detected default adds
 # thread-pool overhead disproportionate to a workload this small.
@@ -40,8 +32,15 @@ tickets_df = pd.read_csv("support_tickets.csv")
 # ---------------------------------------------------------------
 MODEL_NAME = "distilbert-base-uncased-finetuned-sst-2-english"
 print(f"Loading pretrained sentiment model ({MODEL_NAME})...")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, local_files_only=True)
-sentiment_model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, local_files_only=True)
+# Try the local cache first (faster, and avoids a slow DNS-retry storm
+# some networks hit on the Hub's "is there a newer version" check);
+# fall back to a normal online download if nothing is cached yet.
+try:
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, local_files_only=True)
+    sentiment_model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, local_files_only=True)
+except OSError:
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    sentiment_model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
 sentiment_model.eval()
 
 

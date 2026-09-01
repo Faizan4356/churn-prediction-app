@@ -339,14 +339,21 @@ def load_usage_model():
 @st.cache_resource
 def load_sentiment_pipeline():
     """Loads the tokenizer + model directly (not transformers'
-    pipeline() wrapper - see predict_sentiment's docstring)."""
-    import os
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    pipeline() wrapper - see predict_sentiment's docstring).
+
+    Tries the local cache first (fast, and avoids a slow DNS-retry
+    storm some networks hit on the Hub's "is there a newer version"
+    check) and falls back to a normal online download if nothing is
+    cached yet - e.g. a fresh cloud deployment with no prior cache,
+    where forcing offline mode would fail outright with no model."""
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
     model_name = "distilbert-base-uncased-finetuned-sst-2-english"
-    tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
-    sentiment_model = AutoModelForSequenceClassification.from_pretrained(model_name, local_files_only=True)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
+        sentiment_model = AutoModelForSequenceClassification.from_pretrained(model_name, local_files_only=True)
+    except OSError:
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        sentiment_model = AutoModelForSequenceClassification.from_pretrained(model_name)
     sentiment_model.eval()
     return tokenizer, sentiment_model
 
