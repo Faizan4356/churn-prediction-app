@@ -37,9 +37,10 @@ st.set_page_config(page_title="Customer Intelligence Platform", page_icon="📉"
 COLOR_GOOD = "#0ca30c"       # low risk / retained / healthy
 COLOR_WARNING = "#eda100"    # medium risk / at-risk
 COLOR_CRITICAL = "#d03b3b"   # high risk / churned / critical
-COLOR_BLUE = "#2a78d6"       # primary / neutral series
-COLOR_MUTED = "#898781"      # secondary / "average customer" comparisons
-GRID_COLOR = "#e1e0d9"
+COLOR_BLUE = "#3987e5"       # primary / neutral series (lightened for dark background)
+COLOR_MUTED = "#9a9890"      # secondary / "average customer" comparisons
+GRID_COLOR = "rgba(255,255,255,0.15)"   # gridlines - a dark-surface hairline, not the light-mode one
+TEXT_COLOR = "#e8e8e6"       # chart text/labels/ticks on the dark page background
 
 # ---------------------------------------------------------------
 # Plain-language labels used to translate raw column/feature names
@@ -252,7 +253,8 @@ st.markdown(
         font-size: 0.95rem;
     }}
     div[data-testid="stMetric"] {{
-        background: rgba(128,128,128,0.08);
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.08);
         border-radius: 10px;
         padding: 0.75rem 1rem;
     }}
@@ -266,17 +268,21 @@ st.markdown(
         word-break: break-word;
         line-height: 1.2;
     }}
+    /* Black theme - a near-black page with a faint dark-blue/violet
+       wash (not flat black) so panels still read as distinct layers,
+       and dark semi-transparent "cards" for the form and content
+       blocks with a light hairline border for separation. */
     [data-testid="stAppViewContainer"] > .main {{
-        background: linear-gradient(180deg, #eaf1fc 0%, #f3eefc 45%, #fdf6f0 100%);
+        background: radial-gradient(circle at 20% 0%, #14182b 0%, #0a0a0d 45%, #050506 100%);
     }}
     div[data-testid="stForm"] {{
-        background: rgba(255,255,255,0.75);
+        background: rgba(255,255,255,0.04);
         border-radius: 14px;
         padding: 1.25rem 1.5rem 0.5rem 1.5rem;
-        border: 1px solid rgba(0,0,0,0.06);
+        border: 1px solid rgba(255,255,255,0.10);
     }}
     div.block-container div[data-testid="stVerticalBlockBorderWrapper"] {{
-        background: rgba(255,255,255,0.6);
+        background: rgba(255,255,255,0.03);
         border-radius: 12px;
     }}
     .health-badge {{
@@ -452,6 +458,7 @@ with tab_predict:
             yaxis_title="% who cancelled",
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=TEXT_COLOR),
             yaxis=dict(gridcolor=GRID_COLOR, range=[0, 50]),
         )
         st.plotly_chart(contract_fig, use_container_width=True)
@@ -479,6 +486,7 @@ with tab_predict:
             yaxis_title="% who cancelled",
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=TEXT_COLOR),
             yaxis=dict(gridcolor=GRID_COLOR, range=[0, 55]),
         )
         st.plotly_chart(tenure_fig, use_container_width=True)
@@ -641,7 +649,7 @@ with tab_predict:
                 value=proba * 100,
                 number={"suffix": "%", "font": {"size": 40, "color": risk_color}},
                 gauge={
-                    "axis": {"range": [0, 100], "tickcolor": GRID_COLOR},
+                    "axis": {"range": [0, 100], "tickcolor": GRID_COLOR, "tickfont": {"color": TEXT_COLOR}},
                     "bar": {"color": risk_color, "thickness": 0.3},
                     "bgcolor": "rgba(0,0,0,0)",
                     "borderwidth": 0,
@@ -651,9 +659,12 @@ with tab_predict:
                         {"range": [66, 100], "color": "rgba(208,59,59,0.15)"},
                     ],
                 },
-                title={"text": "Chance this customer cancels", "font": {"size": 13}},
+                title={"text": "Chance this customer cancels", "font": {"size": 13, "color": TEXT_COLOR}},
             ))
-            gauge_fig.update_layout(height=260, margin=dict(l=20, r=20, t=50, b=10))
+            gauge_fig.update_layout(
+                height=260, margin=dict(l=20, r=20, t=50, b=10),
+                paper_bgcolor="rgba(0,0,0,0)", font=dict(color=TEXT_COLOR),
+            )
             st.plotly_chart(gauge_fig, use_container_width=True)
 
         with right:
@@ -702,6 +713,7 @@ with tab_predict:
             xaxis_title="← Makes them less likely to leave   |   Makes them more likely to leave →",
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=TEXT_COLOR),
             xaxis=dict(gridcolor=GRID_COLOR, zeroline=True, zerolinecolor=GRID_COLOR, showticklabels=False),
         )
         st.plotly_chart(shap_fig, use_container_width=True)
@@ -742,6 +754,7 @@ with tab_predict:
                 margin=dict(l=10, r=10, t=10, b=10),
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color=TEXT_COLOR),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 yaxis=dict(gridcolor=GRID_COLOR),
             )
@@ -780,17 +793,20 @@ with tab_predict:
             labels=["Subscribed", "Not subscribed"],
             values=[n_subscribed, n_total - n_subscribed],
             hole=0.6,
-            marker_colors=[COLOR_BLUE, "#dcdcdc"],
+            marker_colors=[COLOR_BLUE, "#3a3a40"],
             textinfo="label+percent",
+            textfont=dict(color=TEXT_COLOR),
             sort=False,
         ))
         donut_fig.update_layout(
             height=280,
             margin=dict(l=10, r=10, t=10, b=10),
             showlegend=False,
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color=TEXT_COLOR),
             annotations=[dict(
                 text=f"{n_subscribed}/{n_total}<br>services", x=0.5, y=0.5,
-                font_size=16, showarrow=False,
+                font=dict(size=16, color=TEXT_COLOR), showarrow=False,
             )],
         )
         st.plotly_chart(donut_fig, use_container_width=True)
