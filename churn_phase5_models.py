@@ -5,6 +5,7 @@ Customer Churn Prediction (Telco Customer Churn dataset)
 
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -117,6 +118,58 @@ print("=" * 60)
 print("MODEL COMPARISON SUMMARY")
 print("=" * 60)
 print(summary.round(3))
+
+# ---------------------------------------------------------------
+# 5b. Model comparison chart - a grouped bar chart, one color per
+# model (identity encoding), grouped by metric so it's easy to see
+# which model wins on which axis. Colors are the validated
+# categorical palette's first 3 slots (these 3 clear every CVD/
+# contrast check together, in this fixed order).
+# ---------------------------------------------------------------
+MODEL_COLORS = {
+    "Logistic Regression": "#2a78d6",  # categorical slot 1 (blue)
+    "Random Forest": "#eb6834",        # categorical slot 2 (orange)
+    "XGBoost": "#1baf7a",              # categorical slot 3 (aqua)
+}
+GRID_COLOR = "#e1e0d9"
+AXIS_COLOR = "#c3c2b7"
+TEXT_COLOR = "#0b0b0b"
+MUTED_COLOR = "#898781"
+
+metrics = ["accuracy", "precision", "recall", "f1"]
+metric_labels = ["Accuracy", "Precision", "Recall", "F1-score"]
+model_names = list(results.keys())
+
+fig, ax = plt.subplots(figsize=(8, 5))
+n_models = len(model_names)
+bar_width = 0.8 / n_models
+x = np.arange(len(metrics))
+
+for i, name in enumerate(model_names):
+    values = [results[name][m] for m in metrics]
+    offset = (i - (n_models - 1) / 2) * bar_width
+    bars = ax.bar(x + offset, values, width=bar_width, label=name, color=MODEL_COLORS[name])
+    for bar, val in zip(bars, values):
+        ax.text(bar.get_x() + bar.get_width() / 2, val + 0.015, f"{val:.2f}",
+                 ha="center", va="bottom", fontsize=8, color=TEXT_COLOR)
+
+ax.set_xticks(x)
+ax.set_xticklabels(metric_labels)
+ax.set_ylim(0, 1.0)
+ax.set_ylabel("Score")
+ax.set_title("Model Comparison - Logistic Regression vs Random Forest vs XGBoost")
+ax.grid(axis="y", color=GRID_COLOR, linewidth=1)
+ax.set_axisbelow(True)
+for spine in ["top", "right"]:
+    ax.spines[spine].set_visible(False)
+ax.spines["left"].set_color(AXIS_COLOR)
+ax.spines["bottom"].set_color(AXIS_COLOR)
+ax.tick_params(colors=MUTED_COLOR)
+ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=3, frameon=False)
+plt.tight_layout()
+plt.savefig("plot9_model_comparison.png", dpi=150)
+plt.show()
+print("Saved plot9_model_comparison.png")
 
 # ---------------------------------------------------------------
 # 6. Recommendation

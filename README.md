@@ -114,7 +114,7 @@ services (phone, internet, streaming, security add-ons).
 | 2 | `churn_phase2_cleaning.py` | Fixes `TotalCharges` dtype, handles missing values, dedupes, standardizes categories |
 | 3 | `churn_phase3_eda.py` | Visual EDA — churn by contract, tenure, correlation heatmap, charges distribution |
 | 4 | `churn_phase4_features.py` | Feature engineering (tenure bins, service count, spend ratio, contract-term flag) |
-| 5 | `churn_phase5_models.py` | Trains & compares Logistic Regression, Random Forest, XGBoost |
+| 5 | `churn_phase5_models.py` | Trains & compares Logistic Regression, Random Forest, XGBoost; saves a comparison bar chart |
 | 6 | `churn_phase6_evaluation.py` | ROC/AUC, feature importance, SHAP explanations |
 | 7 | `train_and_save_model.py` | Trains & serializes the final XGBoost pipeline used everywhere else |
 
@@ -153,6 +153,8 @@ correct for the dataset's ~73/27 class imbalance:
 | Logistic Regression | 74.2% | 50.9% | **79.1%** | 0.620 |
 | Random Forest | 76.3% | 54.6% | 63.6% | 0.588 |
 | **XGBoost (deployed)** | 75.1% | 52.1% | 77.3% | **0.622** |
+
+![Grouped bar chart comparing Logistic Regression, Random Forest, and XGBoost across accuracy, precision, recall, and F1-score](screenshots/model_comparison.png)
 
 **XGBoost AUC: 0.839** — meaning the model reliably ranks likely churners
 above likely stayers across virtually any decision threshold.
