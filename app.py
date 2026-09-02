@@ -261,12 +261,22 @@ st.markdown(
     /* st.metric clips its value with an ellipsis by default when the
        column is narrow (e.g. 3 metrics side by side on a small
        screen) - allow it to wrap onto a second line instead of
-       truncating short words like "Neutral" into "Neut...". */
-    div[data-testid="stMetricValue"] {{
-        white-space: normal;
-        overflow: visible;
-        word-break: break-word;
-        line-height: 1.2;
+       truncating short words like "Neutral" into "Neut...". The
+       truncating white-space/overflow rules are actually set on the
+       inner <p>, not the stMetricValue div itself, so target both.
+       Also shrink the value font so words like "Growing"/"Positive"
+       fit on one line in a narrow column instead of splitting
+       mid-word ("Growin" / "g") - overflow-wrap is a fallback for the
+       rare case a single word still can't fit, not the primary wrap
+       mechanism. */
+    div[data-testid="stMetricValue"],
+    div[data-testid="stMetricValue"] p {{
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        overflow-wrap: break-word;
+        line-height: 1.25;
+        font-size: 1.4rem !important;
     }}
     /* Black theme - a near-black page with a faint dark-blue/violet
        wash (not flat black) so panels still read as distinct layers,

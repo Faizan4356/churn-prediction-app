@@ -8,6 +8,16 @@ Streamlit app with three ways to use it.
 
 **Live demo:** [churn-prediction-app-8ioaenzecxexkcskdmzvxc.streamlit.app](https://churn-prediction-app-8ioaenzecxexkcskdmzvxc.streamlit.app/)
 
+## Screenshots
+
+| Single Prediction | Search Existing Customer |
+|---|---|
+| ![Single Prediction tab showing a churn risk gauge, SHAP explanation, and comparison charts for an at-risk customer](screenshots/1_single_prediction.png) | ![Search Existing Customer tab showing a Health Score breakdown for a looked-up customer](screenshots/2_search_customer.png) |
+
+| What-If Simulator | Batch Upload |
+|---|---|
+| ![What-If Simulator tab showing a live-computed Critical Health Score for a hypothetical customer](screenshots/3_whatif_simulator.png) | ![Batch Upload tab showing a scored results table for an uploaded CSV of 5 customers](screenshots/4_batch_upload.png) |
+
 ## Overview
 
 This project walks the full lifecycle of a real classification problem:
